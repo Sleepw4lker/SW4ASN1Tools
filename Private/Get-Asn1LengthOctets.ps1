@@ -19,6 +19,8 @@ Function Get-Asn1LengthOctets {
     # 65535 -> 82FFFF
     # 65536 -> 83010000 (First Number to spawn 3rd Octet)
 
+    $strLen = $strLen / 2
+
     $NumBits = ([Convert]::ToString($strLen,2)).Length
     $NumOctets = [int]([Math]::Ceiling($NumBits / 8))
 

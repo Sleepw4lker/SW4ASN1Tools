@@ -24,33 +24,36 @@ Function New-SW4Certificate {
         [String]
         $Type,
 
+        # Should be made optional of possible
         [Parameter(Mandatory=$True)]
         [ValidateNotNullOrEmpty()]
         [String]
         $CommonName,
 
+        # Should distinguish between DnsName, UPN and the like
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
         [String[]]
         $San,
 
         [Parameter(Mandatory=$False)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateNotNullOrEmpty()] # anyone has a http and ldap regex?
         [String[]]
         $Cdp,
 
         [Parameter(Mandatory=$False)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateNotNullOrEmpty()] # anyone has a http and ldap regex?
         [String[]]
         $Aia,
 
+        # Not implemented yet
         [Parameter(Mandatory=$False)]
         [ValidatePattern("^http\://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(/\S*)?$")]
         [String[]]
         $Ocsp,
 
         [Parameter(Mandatory=$False)]
-        [ValidateScript({$Null -ne (certutil -csplist | find "$($_)")})]
+        [ValidateScript({$Null -ne (certutil -csplist | find "$($_)")})] # Should be converted to PoSH only, but works for now
         [String]
         $Ksp = "Microsoft Enhanced RSA and AES Cryptographic Provider",
 
@@ -64,6 +67,7 @@ Function New-SW4Certificate {
         [Int]
         $KeyLength = 2048,
 
+        # Not implemented, yet
         [Parameter(Mandatory=$False)]
         [ValidateSet("Minutes","Hours","Days","Weeks","Months","Years")]
         [String]
@@ -282,9 +286,9 @@ Function New-SW4Certificate {
 
         # First Argument: MachineContext (0/1)
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa376832(v=vs.85).aspx
-        # Alternative Method: $SigningCert.Initialize($SignerCertificateStore, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
+        # Alternative Method: $SigningCert.Initialize($SigningCert.PSParentPath, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
         $SignerCertificateObject =  New-Object -ComObject 'X509Enrollment.CSignerCertificate'
-        $SignerCertificateObject.Initialize($SignerCertificateStore, 0, 4, $SigningCert.Thumbprint)
+        $SignerCertificateObject.Initialize($SigningCert.PSParentPath, 0, 4, $SigningCert.Thumbprint)
         $TargetCertificate.SignerCertificate = $SignerCertificateObject
 
         # Key Usage Extension 

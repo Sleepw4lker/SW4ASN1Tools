@@ -1,16 +1,3 @@
-# We still have some limitations
-# - only RSA supported at the moment
-# - may not work if the CA is configured to format Subjects in UTF8
-# - currently, no syntactic verification of the given URLs
-
-# To Do List:
-# - Make it possible to specify multiple Subjects/AltNames
-# - Make it possible to specify multiple Signing Certificates
-# - Make it possible to export into PFX instead of local Certificate Store and immediately delete Traces
-# - Make it possible to specify custom EKUs via Parameter, allow multiple EKUs
-# - Ensure that specified Certificate Validity time is no longer of CA Validity time
-# - Replace all remaining Numbers in the Code with meaningful Constants
-
 # Kudos to:
 # https://blog.css-security.com/blog/creating-a-self-signed-ssl-certificate-using-powershell
 # https://blogs.technet.microsoft.com/vishalagarwal/2009/08/21/generating-a-certificate-self-signed-using-powershell-and-certenroll-interfaces/

@@ -8,7 +8,7 @@ Function New-AkiExtension {
     [cmdletbinding()]
     param (
         [Parameter(Mandatory=$True)]
-        [ValidateNotNullOrEmpty()] # Implement a Validation RegEx (40 Chars, Lower, Upper, 0-9), shouldnt be too hard
+        [ValidatePattern("^[0-9a-fA-F]{40,40}$")]
         [String]
         $Aki
     )

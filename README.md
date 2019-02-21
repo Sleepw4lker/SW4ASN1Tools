@@ -15,7 +15,7 @@ Exported Functions:
 ```powershell
 $a = New-CraftedCertificate -Type "CA" -CommonName "Root CA"
 $b = New-CraftedCertificate -Type "CA" -CommonName "Sub CA" -SigningCert $a -PathLength 0
-$c = New-CraftedCertificate -Type "WebServer" -San "www.demo.org" -SigningCert $b
+$c = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -San "www.demo.org" -SigningCert $b
 $a,$b,$c
 ```
 

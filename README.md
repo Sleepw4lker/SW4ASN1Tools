@@ -9,10 +9,16 @@ Exported Functions:
 * `New-AIAExtension` creates a DER Encoded AIA Extension for Usage with the above Functions
 * `New-AKIExtension` creates a DER Encoded AKI Extension for Usage with the above Functions
 
-## Usage Sample:
+## Usage Samples:
+### Creating a PKI in a 3-Liner
 ```powershell
 $a = New-SW4Certificate -CommonName "Root CA" -Type "CA"
 $b = New-SW4Certificate -CommonName "Sub CA" -Type "CA" -SigningCert $a -PathLength 1
 $c = New-SW4Certificate -CommonName "www.lol.de" -Type "WebServer" -SigningCert $b
 $a,$b,$c
+```
+
+### Creating a manual OCSP Request specifying AKI and a HSM
+```powershell
+New-OcspCertificateRequest -Subject "CN=My-Responder" -Ksp "nCipher Security World Key Storage Provider" -Aki "060DDD83737C311EDA5E5B677D8C4D663ED5C5BF" -KeyLength 4096
 ```

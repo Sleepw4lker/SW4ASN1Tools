@@ -8,9 +8,6 @@
 
 Function New-SW4Certificate {
 
-    # Creates a rouge Certificate signed with a given signing Certificate
-    # Usually, a stolen CA Certificate and it's private Key
-    # Intended to demonstrate why it is important to properly secure your CA
     [cmdletbinding()]
     param (
 
@@ -24,11 +21,10 @@ Function New-SW4Certificate {
         [String]
         $Type,
 
-        # Should be made optional of possible
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
         [String]
-        $CommonName,
+        $CommonName = "",
 
         # Should distinguish between DnsName, UPN and the like
         [Parameter(Mandatory=$False)]
@@ -46,18 +42,20 @@ Function New-SW4Certificate {
         [String[]]
         $Aia,
 
+        <#
         # Not implemented yet
         [Parameter(Mandatory=$False)]
         [ValidatePattern("^http\://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(/\S*)?$")]
         [String[]]
         $Ocsp,
+        #>
 
         [Parameter(Mandatory=$False)]
         [ValidateScript({$Null -ne (certutil -csplist | find "$($_)")})] # Should be converted to PoSH only, but works for now
         [String]
         $Ksp = "Microsoft Enhanced RSA and AES Cryptographic Provider",
 
-        [Parameter(Mandatory=$True)] # Should be enhanced to use the own Key if not specified = Self-Signed
+        [Parameter(Mandatory=$False)]
         [ValidateScript({$_.hasPrivateKey})]
         [System.Security.Cryptography.X509Certificates.X509Certificate]
         $SigningCert,
@@ -67,7 +65,6 @@ Function New-SW4Certificate {
         [Int]
         $KeyLength = 2048,
 
-        # Not implemented, yet
         [Parameter(Mandatory=$False)]
         [ValidateSet("Minutes","Hours","Days","Weeks","Months","Years")]
         [String]
@@ -79,15 +76,21 @@ Function New-SW4Certificate {
         $ValidityPeriodUnits = 1,
 
         [Parameter(Mandatory=$False)]
+        [ValidateRange(1,3600)]
+        [Int]
+        $ClockSkew = 10,
+
+        [Parameter(Mandatory=$False)]
         [ValidateSet("MD4","MD5","SHA1","SHA256","SHA384","SHA512")]
         [String]
         $SignatureHashAlgorithm = "SHA256",
 
         [Parameter(Mandatory=$False)]
-        [ValidatePattern("^[0-9a-fA-F]{1,100}$")] # Why 100?
+        [ValidatePattern("^[0-9a-fA-F]{1,100}$")] # Why 100? RFC?
         [String]
         $SerialNumber,
 
+        <#
         # Nothing implemented yet
         [Parameter(Mandatory=$False)]
         [ValidateSet("PrintableString","UTF-8")]
@@ -99,9 +102,10 @@ Function New-SW4Certificate {
         [ValidateSet("Computer","User")]
         [String]
         $Scope = "User",
+        #>
 
         [Parameter(Mandatory=$False)]
-        [ValidateRange(-1,16)] # Should be sufficient...?
+        [ValidateRange(-1,16)] # Should be sufficient...? RFC?
         [Int]
         $PathLength = -1 # -1 means none
 
@@ -153,20 +157,25 @@ Function New-SW4Certificate {
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa374936(v=vs.85).aspx
         New-Variable -Name XCN_CRYPT_STRING_BASE64 -Value 0x1 -Option Constant
 
-        # Validating if our Signing Certificate is really a CA Certificate
-        If (-not ($SigningCert.Extensions.CertificateAuthority)) {
-            Write-Warning "Signing Certificate seems not to be a CA certificate." 
+        If ($Type -eq "CA") {
+
+            # CA Certifcate Key Usages
+            # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
+            # https://msdn.microsoft.com/de-de/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
+            # Since a CA is supposed to issue certificate and CRL, it should have, on a general basis, the keyCertSign and cRLSign flags. 
+            # These two flags are sufficient.
+            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyCertSign, CrlSign, DigitalSignature"
+
+        }
+        Else {
+
+            # Leaf Certificate Key Usages
+            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyEncipherment, DigitalSignature"
+
         }
 
         # Validating the Type Parameter
         Switch ($Type) {
-
-            "CA" {
-
-                # CA Certificate
-                $TargetCertificatePrivateKeyKeySpec = 2
-
-            }
 
             "SmartCardLogon" {
 
@@ -182,32 +191,26 @@ Function New-SW4Certificate {
                     Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
                 }
 
-                # Not a CA Certificate
-                $TargetCertificatePrivateKeyKeySpec = 1
-
                 # Client Authentication and Smart Card Logon EKU
                 $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_CLIENT_AUTH,$XCN_OID_KP_SMARTCARD_LOGON
                 $SanType = $XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
+
             }
 
             "WebServer" {
 
-                # Not a CA Certificate
-                $TargetCertificatePrivateKeyKeySpec = 1
-
                 # Server Authentication EKU
                 $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_SERVER_AUTH
                 $SanType = $XCN_CERT_ALT_NAME_DNS_NAME
+
             }
 
             "CodeSigning" {
 
-                # Not a CA Certificate
-                $TargetCertificatePrivateKeyKeySpec = 1
-
                 # Code Signing EKU
                 $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_CODE_SIGNING
                 $SanType = $XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
+
             }
 
         }
@@ -223,7 +226,7 @@ Function New-SW4Certificate {
 
         # 2 = CA certificate
         # 1 = all others
-        $TargetCertificatePrivateKey.KeySpec = $TargetCertificatePrivateKeyKeySpec
+        $TargetCertificatePrivateKey.KeySpec = [int]($Type -eq "CA") + 1
 
         # 1 = Machine Context
         # 0 = User Context
@@ -254,26 +257,76 @@ Function New-SW4Certificate {
 
         $TargetCertificate.Subject = $SubjectDistinguishedName
 
-        # Issuer
-        $IssuerDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
+        If ($SigningCert) {
 
-        # We must have the CN encoded as printableString instead of UTF-8, otherwise CRL verification will fail
-        # During certificate chain validation (from the end entity to a trusted root) the KeyId is used to create 
-        # the certificate chain and it works independently of the subject and issuer codification (PrintableString or UTF8)
-        # During revocation status validation, a binary comparison is made between the certificate issuer and the CRL issuer,
-        # so both fields must use the same codification in order to match (PrintableString or UTF8)
-        # https://social.technet.microsoft.com/Forums/windowsserver/en-US/0459983f-4f19-48ee-b099-dfd484483176/active-directory-certificate-services-cannot-verify-certificate-chain-bad-cert-issuer-base-crl?forum=winserversecurity
-        # https://msdn.microsoft.com/de-de/library/windows/desktop/bb540814(v=vs.85).aspx
-        # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
-        $IssuerDistinguishedName.Encode($SigningCert.Subject, $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG)
+            # Specify Signing Certificate
 
-        $TargetCertificate.Issuer = $IssuerDistinguishedName
+            # Validating if our Signing Certificate is really a CA Certificate
+            If (-not ($SigningCert.Extensions.CertificateAuthority)) {
+                Write-Warning "Signing Certificate seems not to be a CA certificate." 
+            }
+
+            # First Argument: MachineContext (0/1)
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/aa376832(v=vs.85).aspx
+            # Alternative Method: $SigningCert.Initialize($SigningCert.PSParentPath, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
+            $SignerCertificateObject =  New-Object -ComObject 'X509Enrollment.CSignerCertificate'
+            $SignerCertificateObject.Initialize(
+                [int]($SigningCert.PSParentPath -match "LocalMachine"), 
+                0, 
+                4, 
+                $SigningCert.Thumbprint
+            )
+            $TargetCertificate.SignerCertificate = $SignerCertificateObject
+
+            # If we have a Signing Certificate, we copy its Subject to the Target Certificates Issuer
+            $IssuerDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
+
+            # We must have the CN encoded as printableString instead of UTF-8, otherwise CRL verification will fail
+            # During certificate chain validation (from the end entity to a trusted root) the KeyId is used to create 
+            # the certificate chain and it works independently of the subject and issuer codification (PrintableString or UTF8)
+            # During revocation status validation, a binary comparison is made between the certificate issuer and the CRL issuer,
+            # so both fields must use the same codification in order to match (PrintableString or UTF8)
+            # https://social.technet.microsoft.com/Forums/windowsserver/en-US/0459983f-4f19-48ee-b099-dfd484483176/active-directory-certificate-services-cannot-verify-certificate-chain-bad-cert-issuer-base-crl?forum=winserversecurity
+            # https://msdn.microsoft.com/de-de/library/windows/desktop/bb540814(v=vs.85).aspx
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
+            $IssuerDistinguishedName.Encode($SigningCert.Subject, $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG)
+
+            $TargetCertificate.Issuer = $IssuerDistinguishedName
+
+        }
+        Else {
+
+            # If the Certificate is Self-Signed, it is its own Issuer
+            $TargetCertificate.Issuer = $SubjectDistinguishedName
+
+        }
 
         # Validity  Period
 
-        # Backup One day to Avoid Timing Issues
-        $TargetCertificate.NotBefore = (Get-Date).AddDays(-1)
-        $TargetCertificate.NotAfter = (Get-Date).AddYears($ValidityPeriodUnits).AddDays(1)
+        # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
+        $TargetCertificate.NotBefore = (Get-Date).ToUniversalTime().AddMinutes($ClockSkew * -1)
+
+        Switch ($ValidityPeriod) {
+
+            "Minutes" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddMinutes($ValidityPeriodUnits).AddMinutes($ClockSkew)
+            }
+            "Hours" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddHours($ValidityPeriodUnits).AddMinutes($ClockSkew)
+            }
+            "Days" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddDays($ValidityPeriodUnits).AddMinutes($ClockSkew)
+            }
+            "Weeks" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddWeeks($ValidityPeriodUnits).AddMinutes($ClockSkew)
+            }
+            "Months" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddMonths($ValidityPeriodUnits).AddMinutes($ClockSkew)
+            }
+            "Years" {
+                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddYears($ValidityPeriodUnits).AddMinutes($ClockSkew) 
+            }
+        }
 
         # Serial Number of the Certificate
         If ($SerialNumber) {
@@ -282,29 +335,7 @@ Function New-SW4Certificate {
 
         }
 
-        # Specify Signing Certificate
-
-        # First Argument: MachineContext (0/1)
-        # https://msdn.microsoft.com/en-us/library/windows/desktop/aa376832(v=vs.85).aspx
-        # Alternative Method: $SigningCert.Initialize($SigningCert.PSParentPath, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
-        $SignerCertificateObject =  New-Object -ComObject 'X509Enrollment.CSignerCertificate'
-        $SignerCertificateObject.Initialize($SigningCert.PSParentPath, 0, 4, $SigningCert.Thumbprint)
-        $TargetCertificate.SignerCertificate = $SignerCertificateObject
-
         # Key Usage Extension 
-
-        If ($Type -eq "CA") {
-            # CA Certifcate Key Usages
-            # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
-            # https://msdn.microsoft.com/de-de/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
-            # Since a CA is supposed to issue certificate and CRL, it should have, on a general basis, the keyCertSign and cRLSign flags. 
-            # These two flags are sufficient.
-            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyCertSign, CrlSign, DigitalSignature"
-        } Else {
-            # Leaf Certificate Key Usages
-            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyEncipherment, DigitalSignature"
-        }
-
         $KeyUsageExtension = New-Object -ComObject X509Enrollment.CX509ExtensionKeyUsage
         $KeyUsageExtension.InitializeEncode([Int]$KeyUsage)
         $KeyUsageExtension.Critical = $True

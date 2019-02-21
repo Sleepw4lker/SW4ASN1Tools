@@ -19,7 +19,7 @@ Function New-CraftedCertificate {
 
         [Parameter(Mandatory=$False)]
         [ValidateSet("SmartCardLogon","ClientAuth","ServerAuth","CodeSigning")]
-        [String]
+        [String[]]
         $Eku,
 
         [Parameter(Mandatory=$False)]
@@ -178,50 +178,6 @@ Function New-CraftedCertificate {
 
             # Leaf Certificate Key Usages
             [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyEncipherment, DigitalSignature"
-
-        }
-
-
-        If ($Eku) {
-
-            $EnhancedKeyUsageOidList = ''
-
-            $Eku | Sort-Object | Get-Unique | ForEach-Object {
-
-                If ($_ -eq "SmartCardLogon") {
-
-                    # Validating if we have a CDP Extension specified
-                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                    If (-not ($Cdp)) {
-                        Write-Warning "The CDP Extension is mandatory for Smartcard Logon Certificates." 
-                    }
-
-                    # Validating if we have a Subject Alternative Name specified
-                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                    If (-not ($Upn)) {
-                        Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
-                    }
-
-                    # Smart Card Logon EKU
-                    $EnhancedKeyUsageOidList += $XCN_OID_KP_SMARTCARD_LOGON
-
-                }
-
-                If ($_ -eq "ClientAuth") {
-                    # Client Authentication EKU
-                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_CLIENT_AUTH
-                }
-
-                If ($_ -eq "ServerAuth") {
-                    # Server Authentication EKU
-                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_SERVER_AUTH
-                }
-
-                If ($_ -eq "CodeSigning") {
-                    # Code Signing EKU
-                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_CODE_SIGNING 
-                }
-            }
 
         }
 
@@ -386,17 +342,51 @@ Function New-CraftedCertificate {
         }
 
         # Set the Enhanced Key Usages Extension depending on Certificate Type
-        If ($EnhancedKeyUsageOidList) {
+        If ($Eku) {
     
             $EnhancedKeyUsageExtension = New-Object -ComObject 'X509Enrollment.CX509ExtensionEnhancedKeyUsage'
             $EnhancedKeyUsageOids = New-Object -ComObject 'X509Enrollment.CObjectIds.1'
 
-            ForEach ($EnhancedKeyUsage in $EnhancedKeyUsageOidList) {
+            $Eku | Sort-Object | Get-Unique | ForEach-Object {
 
                 $EnhancedKeyUsageOid = New-Object -ComObject 'X509Enrollment.CObjectId'
-                $EnhancedKeyUsageOid.InitializeFromValue($EnhancedKeyUsage)
-                $EnhancedKeyUsageOids.Add($EnhancedKeyUsageOid)
 
+                If ($_ -eq "SmartCardLogon") {
+
+                    # Validating if we have a CDP Extension specified
+                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
+                    If (-not ($Cdp)) {
+                        Write-Warning "The CDP Extension is mandatory for Smartcard Logon Certificates." 
+                    }
+
+                    # Validating if we have a Subject Alternative Name specified
+                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
+                    If (-not ($Upn)) {
+                        Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
+                    }
+
+                    # Smart Card Logon EKU
+                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_KP_SMARTCARD_LOGON)
+
+                }
+
+                If ($_ -eq "ClientAuth") {
+                    # Client Authentication EKU
+                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_CLIENT_AUTH)
+                }
+
+                If ($_ -eq "ServerAuth") {
+                    # Server Authentication EKU
+                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_SERVER_AUTH)
+                }
+
+                If ($_ -eq "CodeSigning") {
+                    # Code Signing EKU
+                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_CODE_SIGNING)
+                }
+
+                $EnhancedKeyUsageOids.Add($EnhancedKeyUsageOid)
+    
             }
 
             $EnhancedKeyUsageExtension.InitializeEncode($EnhancedKeyUsageOids)

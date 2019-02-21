@@ -10,12 +10,22 @@ Exported Functions:
 * `New-AKIExtension` creates a DER Encoded AKI Extension for Usage with the above Functions
 
 ## Usage Samples:
+
 ### Creating a Certificate Hierarchy in a 3-Liner
 ```powershell
-$a = New-CraftedCertificate -CommonName "Root CA" -Type "CA"
-$b = New-CraftedCertificate -CommonName "Sub CA" -Type "CA" -SigningCert $a -PathLength 1
-$c = New-CraftedCertificate -CommonName "www.lol.de" -Type "WebServer" -SigningCert $b
+$a = New-CraftedCertificate -Type "CA" -CommonName "Root CA"
+$b = New-CraftedCertificate -Type "CA" -CommonName "Sub CA" -SigningCert $a -PathLength 0
+$c = New-CraftedCertificate -Type "WebServer" -San "www.demo.org" -SigningCert $b
 $a,$b,$c
+```
+
+### Demonstrating a Path length Constraint violation
+```powershell
+$a = New-CraftedCertificate -Type "CA" -CommonName "Root CA" 
+$b = New-CraftedCertificate -Type "CA" -CommonName "Sub CA" -SigningCert $a -PathLength 0
+$c = New-CraftedCertificate -Type "CA" -CommonName "Invalid CA" -SigningCert $b
+$d = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -San "www.demo.org" -SigningCert $c
+$a,$b,$c,$d
 ```
 
 ### Creating a manual OCSP Request specifying AKI and a HSM

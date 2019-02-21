@@ -96,13 +96,13 @@ Function New-SW4Certificate {
         [ValidateSet("PrintableString","UTF-8")]
         [String]
         $Encoding = "PrintableString",
-
+        #>
+        
         # Still broken
         [Parameter(Mandatory=$False)]
         [ValidateSet("Computer","User")]
         [String]
         $Scope = "User",
-        #>
 
         [Parameter(Mandatory=$False)]
         [ValidateRange(-1,16)] # Should be sufficient...? RFC?

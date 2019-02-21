@@ -252,7 +252,7 @@ Function New-CraftedCertificate {
         If ($Encoding -eq "PrintableString") {
             $SubjectEncodingFlag = $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG
         }
-        ElseIf ($Encoding -eq "UTF-8") { {
+        ElseIf ($Encoding -eq "UTF-8") {
             $SubjectEncodingFlag = $XCN_CERT_NAME_STR_FORCE_UTF8_DIR_STR_FLAG
         }
 

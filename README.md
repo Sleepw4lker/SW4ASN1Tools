@@ -10,11 +10,11 @@ Exported Functions:
 * `New-AKIExtension` creates a DER Encoded AKI Extension for Usage with the above Functions
 
 ## Usage Samples:
-### Creating a PKI in a 3-Liner
+### Creating a Certificate Hierarchy in a 3-Liner
 ```powershell
-$a = New-SW4Certificate -CommonName "Root CA" -Type "CA"
-$b = New-SW4Certificate -CommonName "Sub CA" -Type "CA" -SigningCert $a -PathLength 1
-$c = New-SW4Certificate -CommonName "www.lol.de" -Type "WebServer" -SigningCert $b
+$a = New-CraftedCertificate -CommonName "Root CA" -Type "CA"
+$b = New-CraftedCertificate -CommonName "Sub CA" -Type "CA" -SigningCert $a -PathLength 1
+$c = New-CraftedCertificate -CommonName "www.lol.de" -Type "WebServer" -SigningCert $b
 $a,$b,$c
 ```
 

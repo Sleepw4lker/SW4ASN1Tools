@@ -6,7 +6,7 @@
 # https://social.technet.microsoft.com/Forums/en-US/f568edfa-7f93-46a4-aab9-a06151592dd9/converting-ascii-to-asn1-der?forum=winserverpowershell
 # https://gallery.technet.microsoft.com/scriptcenter/Self-signed-certificate-5920a7c6
 
-Function New-SW4Certificate {
+Function New-CraftedCertificate {
 
     [cmdletbinding()]
     param (
@@ -90,13 +90,10 @@ Function New-SW4Certificate {
         [String]
         $SerialNumber,
 
-        <#
-        # Nothing implemented yet
         [Parameter(Mandatory=$False)]
         [ValidateSet("PrintableString","UTF-8")]
         [String]
         $Encoding = "PrintableString",
-        #>
         
         # Still broken
         [Parameter(Mandatory=$False)]
@@ -129,7 +126,10 @@ Function New-SW4Certificate {
         New-Variable -Name UserContext -Value 0x1 -Option Constant
         New-Variable -Name MachineContext -Value 0x2 -Option Constant
 
+        # https://docs.microsoft.com/de-de/windows/desktop/api/certenroll/ne-certenroll-x500nameflags
+        # https://docs.microsoft.com/en-us/dotnet/api/microsoft.hpc.scheduler.store.x500nameflags?view=hpc-sdk-5.1.6115
         New-Variable -Name XCN_CERT_NAME_STR_NONE -Value 0 -Option Constant
+        New-Variable -Name XCN_CERT_NAME_STR_FORCE_UTF8_DIR_STR_FLAG -Value 0x80000 -Option Constant
         New-Variable -Name XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG -Value 0x100000 -Option Constant
 
         # https://blog.css-security.com/blog/creating-a-self-signed-ssl-certificate-using-powershell
@@ -248,12 +248,24 @@ Function New-SW4Certificate {
         $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
         $TargetCertificate.InitializeFromPrivateKey($UserContext, $TargetCertificatePrivateKey, "")
 
+        # Determine if we shall encode Subject and Issuer in PrintableString (Default) or UTF-8
+        If ($Encoding -eq "PrintableString") {
+            $SubjectEncodingFlag = $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG
+        }
+        ElseIf ($Encoding -eq "UTF-8") { {
+            $SubjectEncodingFlag = $XCN_CERT_NAME_STR_FORCE_UTF8_DIR_STR_FLAG
+        }
+
         # Subject Name
 
         $SubjectDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
 
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
-        $SubjectDistinguishedName.Encode("CN=$($CommonName)", $XCN_CERT_NAME_STR_NONE)
+        # $XCN_CERT_NAME_STR_NONE
+        $SubjectDistinguishedName.Encode(
+            "CN=$($CommonName)",
+            $SubjectEncodingFlag
+        )
 
         $TargetCertificate.Subject = $SubjectDistinguishedName
 
@@ -287,12 +299,15 @@ Function New-SW4Certificate {
             # During revocation status validation, a binary comparison is made between the certificate issuer and the CRL issuer,
             # so both fields must use the same codification in order to match (PrintableString or UTF8)
             # https://social.technet.microsoft.com/Forums/windowsserver/en-US/0459983f-4f19-48ee-b099-dfd484483176/active-directory-certificate-services-cannot-verify-certificate-chain-bad-cert-issuer-base-crl?forum=winserversecurity
-            # https://msdn.microsoft.com/de-de/library/windows/desktop/bb540814(v=vs.85).aspx
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/bb540814(v=vs.85).aspx
             # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
-            $IssuerDistinguishedName.Encode($SigningCert.Subject, $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG)
+
+            $IssuerDistinguishedName.Encode(
+                $SigningCert.Subject,
+                $SubjectEncodingFlag
+            )
 
             $TargetCertificate.Issuer = $IssuerDistinguishedName
-
         }
         Else {
 
@@ -303,35 +318,31 @@ Function New-SW4Certificate {
 
         # Validity  Period
 
-        # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
-        $TargetCertificate.NotBefore = (Get-Date).ToUniversalTime().AddMinutes($ClockSkew * -1)
+        # Validity Periods are always written into the Cert as Universal Time
+        $Now = (Get-Date).ToUniversalTime()
 
         Switch ($ValidityPeriod) {
 
-            "Minutes" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddMinutes($ValidityPeriodUnits).AddMinutes($ClockSkew)
-            }
-            "Hours" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddHours($ValidityPeriodUnits).AddMinutes($ClockSkew)
-            }
-            "Days" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddDays($ValidityPeriodUnits).AddMinutes($ClockSkew)
-            }
-            "Weeks" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddWeeks($ValidityPeriodUnits).AddMinutes($ClockSkew)
-            }
-            "Months" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddMonths($ValidityPeriodUnits).AddMinutes($ClockSkew)
-            }
-            "Years" {
-                $TargetCertificate.NotAfter = (Get-Date).ToUniversalTime().AddYears($ValidityPeriodUnits).AddMinutes($ClockSkew) 
-            }
+            "Minutes"   { $NotAfter = $Now.AddMinutes($ValidityPeriodUnits) }
+            "Hours"     { $NotAfter = $Now.AddHours($ValidityPeriodUnits) }
+            "Days"      { $NotAfter = $Now.AddDays($ValidityPeriodUnits) }
+            "Weeks"     { $NotAfter = $Now.AddWeeks($ValidityPeriodUnits) }
+            "Months"    { $NotAfter = $Now.AddMonths($ValidityPeriodUnits) }
+            "Years"     { $NotAfter = $Now.AddYears($ValidityPeriodUnits) }
+
         }
+
+        # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
+        $TargetCertificate.NotBefore = $Now.AddMinutes($ClockSkew * -1)
+        $TargetCertificate.NotAfter = $NotAfter.AddMinutes($ClockSkew) 
 
         # Serial Number of the Certificate
         If ($SerialNumber) {
 
-            $TargetCertificate.SerialNumber.InvokeSet($(Convert-StringToCertificateSerialNumber -SerialNumber $SerialNumber), 1)
+            $TargetCertificate.SerialNumber.InvokeSet(
+                $(Convert-StringToCertificateSerialNumber -SerialNumber $SerialNumber), 
+                1
+            )
 
         }
 
@@ -353,7 +364,10 @@ Function New-SW4Certificate {
             $BasicConstraintsExtension = New-Object -ComObject X509Enrollment.CX509ExtensionBasicConstraints
 
             # First Parameter: CA or not
-            $BasicConstraintsExtension.InitializeEncode($IsCA, $PathLength)
+            $BasicConstraintsExtension.InitializeEncode(
+                $IsCA, 
+                $PathLength
+            )
 
             # Only mark as critical if it is a CA certificate
             $BasicConstraintsExtension.Critical = $IsCA
@@ -415,7 +429,11 @@ Function New-SW4Certificate {
             $CdpExtensionOid.InitializeFromValue($XCN_OID_CRL_DIST_POINTS)
             $CdpExtension.Critical = $False
             # https://msdn.microsoft.com/en-us/library/windows/desktop/aa378511(v=vs.85).aspx
-            $CdpExtension.Initialize($CdpExtensionOid, $XCN_CRYPT_STRING_BASE64, $(New-CdpExtension -Url $Cdp))
+            $CdpExtension.Initialize(
+                $CdpExtensionOid, 
+                $XCN_CRYPT_STRING_BASE64, 
+                $(New-CdpExtension -Url $Cdp)
+            )
 
             # Adding the Extension to the Certificate
             $TargetCertificate.X509Extensions.Add($CdpExtension)
@@ -432,7 +450,11 @@ Function New-SW4Certificate {
             $AiaExtensionOid.InitializeFromValue($XCN_OID_AUTHORITY_INFO_ACCESS)
             $AiaExtension.Critical = $False
             # https://msdn.microsoft.com/en-us/library/windows/desktop/aa378511(v=vs.85).aspx
-            $AiaExtension.Initialize($AiaExtensionOid, $XCN_CRYPT_STRING_BASE64, $(New-AiaExtension -Url $Aia))
+            $AiaExtension.Initialize(
+                $AiaExtensionOid, 
+                $XCN_CRYPT_STRING_BASE64, 
+                $(New-AiaExtension -Url $Aia)
+            )
 
             # Adding the Extension to the Certificate
             $TargetCertificate.X509Extensions.Add($AiaExtension)
@@ -441,7 +463,12 @@ Function New-SW4Certificate {
 
         # Specifying the Hashing Algorithm to use
         $HashAlgorithmObject = New-Object -ComObject X509Enrollment.CObjectId
-        $HashAlgorithmObject.InitializeFromAlgorithmName(1, 0, 0, $SignatureHashAlgorithm)
+        $HashAlgorithmObject.InitializeFromAlgorithmName(
+            1, 
+            0, 
+            0, 
+            $SignatureHashAlgorithm
+        )
         $TargetCertificate.HashAlgorithm = $HashAlgorithmObject
 
         # Encoding the Certificate Signing Request
@@ -453,9 +480,15 @@ Function New-SW4Certificate {
         $TargetCertificateCsr = $EnrollmentObject.CreateRequest(0)
 
         # Signing the Certificate
-        $EnrollmentObject.InstallResponse(2, $TargetCertificateCsr, 0, "")
+        $EnrollmentObject.InstallResponse(
+            2,
+            $TargetCertificateCsr, 
+            0, 
+            ""
+        )
 
-        # Returning the Certificate
+        # Returning the Certificate, have to rebuild the Query so that it'll work when there is no Subject specified
+        # Or find a way to extract the Info from the $EnrollmentObject
         Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match $CommonName } | Sort-Object -Descending NotAfter | Select-Object -First 1
 
     }

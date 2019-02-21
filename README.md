@@ -3,11 +3,11 @@
 Some helpful functions to play with Certificates in Powershell.
 
 Exported Functions:
-* `New-SW4Certificate` Can both create self-signed Certificates as well as sign with a different Key.
-* `New-OCSPCertificateRequest` Creates a Certificate Signing Request for the Microsoft OCSP Responder that contains the AKI Extension, which allows for manual Enrollment, e.g. in a DMZ Scenario. Supports specifying the KSP, thus the usage of a HSM is possible.
-* `New-CDPExtension` creates a DER Encoded CDP Extension for Usage with the above Functions
-* `New-AIAExtension` creates a DER Encoded AIA Extension for Usage with the above Functions
-* `New-AKIExtension` creates a DER Encoded AKI Extension for Usage with the above Functions
+* `New-SW4Certificate` crafts a Certificate based on the given Arguments. Can both create self-signed Certificates as well as sign with a different Key.
+* `New-OCSPCertificateRequest` creates a Certificate Signing Request for the Microsoft OCSP Responder that contains the AKI Extension, which allows for manual Enrollment, e.g. in a DMZ Scenario. Supports specifying the KSP, thus the usage of a HSM is possible.
+* `New-CDPExtension` creates a DER Encoded CDP Extension for Usage with the above Functions.
+* `New-AIAExtension` creates a DER Encoded AIA Extension for Usage with the above Functions.
+* `New-AKIExtension` creates a DER Encoded AKI Extension for Usage with the above Functions.
 
 ## Usage Samples:
 
@@ -15,7 +15,7 @@ Exported Functions:
 ```powershell
 $a = New-CraftedCertificate -CA -CommonName "Root CA"
 $b = New-CraftedCertificate -CA -CommonName "Sub CA" -SigningCert $a -PathLength 0
-$c = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -DnsName "www.demo.org" -SigningCert $b
+$c = New-CraftedCertificate -Eku "ServerAuth" -CommonName "www.demo.org" -DnsName "www.demo.org" -SigningCert $b
 $a,$b,$c
 ```
 

@@ -11,8 +11,9 @@ Function New-CraftedCertificate {
     [cmdletbinding()]
     param (
 
-        # Parameter Sets
+        # To Do: Combine them to Parameter Sets
         # http://wragg.io/create-dynamic-powershell-functions-with-parameter-sets/
+
         [Parameter(Mandatory=$False)]
         [Switch]
         $CA = $False,
@@ -117,6 +118,7 @@ Function New-CraftedCertificate {
 
     process {
 
+        # Instantly die if we have Computer Store as Target but do not run the Function with Elevation
         If ($Scope -eq "Computer") {
 
             # Check for Elevation - we will create a Machine Key
@@ -125,10 +127,6 @@ Function New-CraftedCertificate {
             }
 
         }
-
-        # To Do:
-        # - More Input validation
-        # - I would like to see all relevant Numbers as Constants here
 
         New-Variable -Name UserContext -Value 0x1 -Option Constant
         New-Variable -Name MachineContext -Value 0x2 -Option Constant
@@ -164,31 +162,13 @@ Function New-CraftedCertificate {
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa374936(v=vs.85).aspx
         New-Variable -Name XCN_CRYPT_STRING_BASE64 -Value 0x1 -Option Constant
 
-        If ($CA) {
-
-            # CA Certifcate Key Usages
-            # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
-            # https://msdn.microsoft.com/de-de/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
-            # Since a CA is supposed to issue certificate and CRL, it should have, on a general basis, the keyCertSign and cRLSign flags. 
-            # These two flags are sufficient.
-            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyCertSign, CrlSign, DigitalSignature"
-
-        }
-        Else {
-
-            # Leaf Certificate Key Usages
-            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyEncipherment, DigitalSignature"
-
-        }
-
         # Here's how you move the Certificate to a Smart Card later on: 
         # https://blogs.technet.microsoft.com/pki/2007/11/13/manually-importing-keys-into-a-smart-card/
         # certutil –csp "Microsoft Base Smart Card Crypto Provider" –importpfx "<Filename>.pfx"
-        $TargetCryptoProvider = $Ksp
 
         # Creating a new Private Key
         $TargetCertificatePrivateKey = New-Object -ComObject 'X509Enrollment.CX509PrivateKey'
-        $TargetCertificatePrivateKey.ProviderName = $TargetCryptoProvider
+        $TargetCertificatePrivateKey.ProviderName = $Ksp
 
         # 2 = CA certificate
         # 1 = all others
@@ -207,9 +187,7 @@ Function New-CraftedCertificate {
         # Creating the Key (Pair)
         $TargetCertificatePrivateKey.Create()
 
-        #
-        # Assembling the Certificate
-        #
+        # Begin Assembling the Certificate Signing Request
 
         $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
         $TargetCertificate.InitializeFromPrivateKey($UserContext, $TargetCertificatePrivateKey, "")
@@ -222,7 +200,7 @@ Function New-CraftedCertificate {
             $SubjectEncodingFlag = $XCN_CERT_NAME_STR_FORCE_UTF8_DIR_STR_FLAG
         }
 
-        # Subject Name
+        # Set Certificate Subject Name
 
         $SubjectDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
 
@@ -235,9 +213,9 @@ Function New-CraftedCertificate {
 
         $TargetCertificate.Subject = $SubjectDistinguishedName
 
-        If ($SigningCert) {
+        # Set Signing Certificate
 
-            # Specify Signing Certificate
+        If ($SigningCert) {
 
             # Validating if our Signing Certificate is really a CA Certificate
             If (-not ($SigningCert.Extensions.CertificateAuthority)) {
@@ -277,12 +255,13 @@ Function New-CraftedCertificate {
         }
         Else {
 
-            # If the Certificate is Self-Signed, it is its own Issuer
+            # If no Signing Certificate is given, the Certificate is Self-Signed,
+            # Thus it is its own Issuer
             $TargetCertificate.Issuer = $SubjectDistinguishedName
 
         }
 
-        # Validity  Period
+        # Set Certificate Validity Period
 
         # Validity Periods are always written into the Cert as Universal Time
         $Now = (Get-Date).ToUniversalTime()
@@ -298,7 +277,6 @@ Function New-CraftedCertificate {
 
         }
 
-        # Set Certificate Validity
         # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
         $TargetCertificate.NotBefore = $Now.AddMinutes($ClockSkew * -1)
         $TargetCertificate.NotAfter = $NotAfter.AddMinutes($ClockSkew) 
@@ -313,7 +291,25 @@ Function New-CraftedCertificate {
 
         }
 
-        # Set the Key Usage Extension 
+        # Set the Key Usage Extension
+
+        If ($CA) {
+
+            # CA Certifcate Key Usages
+            # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
+            # https://msdn.microsoft.com/de-de/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
+            # Since a CA is supposed to issue certificate and CRL, it should have, on a general basis, the keyCertSign and cRLSign flags. 
+            # These two flags are sufficient.
+            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyCertSign, CrlSign, DigitalSignature"
+
+        }
+        Else {
+
+            # Leaf Certificate Key Usages
+            [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyEncipherment, DigitalSignature"
+
+        }
+
         $KeyUsageExtension = New-Object -ComObject X509Enrollment.CX509ExtensionKeyUsage
         $KeyUsageExtension.InitializeEncode([Int]$KeyUsage)
         $KeyUsageExtension.Critical = $True

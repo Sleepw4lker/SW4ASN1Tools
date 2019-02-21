@@ -13,19 +13,27 @@ Exported Functions:
 
 ### Creating a Certificate Hierarchy in a 3-Liner
 ```powershell
-$a = New-CraftedCertificate -Type "CA" -CommonName "Root CA"
-$b = New-CraftedCertificate -Type "CA" -CommonName "Sub CA" -SigningCert $a -PathLength 0
-$c = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -San "www.demo.org" -SigningCert $b
+$a = New-CraftedCertificate -CA -CommonName "Root CA"
+$b = New-CraftedCertificate -CA -CommonName "Sub CA" -SigningCert $a -PathLength 0
+$c = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -DnsName "www.demo.org" -SigningCert $b
 $a,$b,$c
 ```
 
 ### Demonstrating a Path length Constraint violation
 ```powershell
-$a = New-CraftedCertificate -Type "CA" -CommonName "Root CA" 
-$b = New-CraftedCertificate -Type "CA" -CommonName "Sub CA" -SigningCert $a -PathLength 0
-$c = New-CraftedCertificate -Type "CA" -CommonName "Invalid CA" -SigningCert $b
-$d = New-CraftedCertificate -Type "WebServer" -CommonName "www.demo.org" -San "www.demo.org" -SigningCert $c
+$a = New-CraftedCertificate -CA -CommonName "Root CA" 
+$b = New-CraftedCertificate -CA -CommonName "Sub CA" -SigningCert $a -PathLength 0
+$c = New-CraftedCertificate -CA -CommonName "Invalid Path Length CA" -SigningCert $b
+$d = New-CraftedCertificate -Eku "ServerAuth" -CommonName "Invalid Path Length Certificate" -DnsName "www.demo.org" -SigningCert $c
 $a,$b,$c,$d
+```
+
+### Demonstrating an EKU Constraint violation
+```powershell
+$a = New-CraftedCertificate -CA -CommonName "Root CA" 
+$c = New-CraftedCertificate -CA -Eku "ClientAuth" -CommonName "Sub CA 1" -SigningCert $a
+$c = New-CraftedCertificate -Eku "ServerAuth" -CommonName "Invalid EKU Certificate" -DnsName "www.demo.org" -SigningCert $b
+$a,$b,$c
 ```
 
 ### Creating a manual OCSP Request specifying AKI and a HSM

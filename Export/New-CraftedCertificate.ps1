@@ -13,13 +13,14 @@ Function New-CraftedCertificate {
 
         # Parameter Sets
         # http://wragg.io/create-dynamic-powershell-functions-with-parameter-sets/
+        [Parameter(Mandatory=$False)]
+        [Switch]
+        $CA = $False,
 
-        # What about an -EKU Parameter instead? Like -EKU "ClientAuthentication","SmartCardLogon"
-        # Then, Distinguish only between "CA" or not
-        [Parameter(Mandatory=$True)]
-        [ValidateSet("CA","SmartCardLogon","WebServer","CodeSigning")]
+        [Parameter(Mandatory=$False)]
+        [ValidateSet("SmartCardLogon","ClientAuth","ServerAuth","CodeSigning")]
         [String]
-        $Type,
+        $Eku,
 
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
@@ -30,7 +31,13 @@ Function New-CraftedCertificate {
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
         [String[]]
-        $San,
+        $DnsName,
+
+        # Should distinguish between DnsName, UPN and the like
+        [Parameter(Mandatory=$False)]
+        [ValidateNotNullOrEmpty()]
+        [String[]]
+        $Upn,
 
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()] # anyone has a http and ldap regex?
@@ -157,7 +164,7 @@ Function New-CraftedCertificate {
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa374936(v=vs.85).aspx
         New-Variable -Name XCN_CRYPT_STRING_BASE64 -Value 0x1 -Option Constant
 
-        If ($Type -eq "CA") {
+        If ($CA) {
 
             # CA Certifcate Key Usages
             # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
@@ -174,43 +181,46 @@ Function New-CraftedCertificate {
 
         }
 
-        # Validating the Type Parameter
-        Switch ($Type) {
 
-            "SmartCardLogon" {
+        If ($Eku) {
 
-                # Validating if we have a CDP Extension specified
-                # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                If (-not ($Cdp)) {
-                    Write-Warning "The CDP Extension is mandatory for Smartcard Logon Certificates." 
+            $EnhancedKeyUsageOidList = ''
+
+            $Eku | Sort-Object | Get-Unique | ForEach-Object {
+
+                If ($_ -eq "SmartCardLogon") {
+
+                    # Validating if we have a CDP Extension specified
+                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
+                    If (-not ($Cdp)) {
+                        Write-Warning "The CDP Extension is mandatory for Smartcard Logon Certificates." 
+                    }
+
+                    # Validating if we have a Subject Alternative Name specified
+                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
+                    If (-not ($Upn)) {
+                        Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
+                    }
+
+                    # Smart Card Logon EKU
+                    $EnhancedKeyUsageOidList += $XCN_OID_KP_SMARTCARD_LOGON
+
                 }
 
-                # Validating if we have a Subject Alternative Name specified
-                # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                If (-not ($San)) {
-                    Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
+                If ($_ -eq "ClientAuth") {
+                    # Client Authentication EKU
+                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_CLIENT_AUTH
                 }
 
-                # Client Authentication and Smart Card Logon EKU
-                $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_CLIENT_AUTH,$XCN_OID_KP_SMARTCARD_LOGON
-                $SanType = $XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
+                If ($_ -eq "ServerAuth") {
+                    # Server Authentication EKU
+                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_SERVER_AUTH
+                }
 
-            }
-
-            "WebServer" {
-
-                # Server Authentication EKU
-                $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_SERVER_AUTH
-                $SanType = $XCN_CERT_ALT_NAME_DNS_NAME
-
-            }
-
-            "CodeSigning" {
-
-                # Code Signing EKU
-                $EnhancedKeyUsageOidList = $XCN_OID_PKIX_KP_CODE_SIGNING
-                $SanType = $XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
-
+                If ($_ -eq "CodeSigning") {
+                    # Code Signing EKU
+                    $EnhancedKeyUsageOidList += $XCN_OID_PKIX_KP_CODE_SIGNING 
+                }
             }
 
         }
@@ -226,7 +236,7 @@ Function New-CraftedCertificate {
 
         # 2 = CA certificate
         # 1 = all others
-        $TargetCertificatePrivateKey.KeySpec = [int]($Type -eq "CA") + 1
+        $TargetCertificatePrivateKey.KeySpec = [int]($CA.IsPresent) + 1
 
         # 1 = Machine Context
         # 0 = User Context
@@ -332,11 +342,12 @@ Function New-CraftedCertificate {
 
         }
 
+        # Set Certificate Validity
         # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
         $TargetCertificate.NotBefore = $Now.AddMinutes($ClockSkew * -1)
         $TargetCertificate.NotAfter = $NotAfter.AddMinutes($ClockSkew) 
 
-        # Serial Number of the Certificate
+        # Set Serial Number of the Certificate if specified as Argument, otherwise use a random SN
         If ($SerialNumber) {
 
             $TargetCertificate.SerialNumber.InvokeSet(
@@ -346,37 +357,35 @@ Function New-CraftedCertificate {
 
         }
 
-        # Key Usage Extension 
+        # Set the Key Usage Extension 
         $KeyUsageExtension = New-Object -ComObject X509Enrollment.CX509ExtensionKeyUsage
         $KeyUsageExtension.InitializeEncode([Int]$KeyUsage)
         $KeyUsageExtension.Critical = $True
 
-        # Adding the Extension to the Certificate
+        # Adding the Key Usage Extension to the Certificate
         $TargetCertificate.X509Extensions.Add($KeyUsageExtension)
 
-        # Basic Constraints Extension
+        # Set Basic Constraints Extension
         # only if we build a CA certificate
 
-        If ($Type -eq "CA") {
-
-            $IsCA = $True
+        If ($CA.IsPresent) {
 
             $BasicConstraintsExtension = New-Object -ComObject X509Enrollment.CX509ExtensionBasicConstraints
 
             # First Parameter: CA or not
             $BasicConstraintsExtension.InitializeEncode(
-                $IsCA, 
+                $True, 
                 $PathLength
             )
 
             # Only mark as critical if it is a CA certificate
-            $BasicConstraintsExtension.Critical = $IsCA
+            $BasicConstraintsExtension.Critical = $True
 
             # Adding the Extension to the Certificate
             $TargetCertificate.X509Extensions.Add($BasicConstraintsExtension)
         }
 
-        # Enhanced Key Usages Extension
+        # Set the Enhanced Key Usages Extension depending on Certificate Type
         If ($EnhancedKeyUsageOidList) {
     
             $EnhancedKeyUsageExtension = New-Object -ComObject 'X509Enrollment.CX509ExtensionEnhancedKeyUsage'
@@ -397,14 +406,25 @@ Function New-CraftedCertificate {
 
         }
 
-        # Subject Alternative Names Extension
-        If ($San) {
+        # Set the Subject Alternative Names Extension if specified as Argument
+        If ($Upn -or $DnsName) {
 
             $SansExtension = New-Object -ComObject X509Enrollment.CX509ExtensionAlternativeNames
             $Sans = New-Object -ComObject X509Enrollment.CAlternativeNames
 
-            Foreach ($Entry in $San) {
+            Foreach ($Entry in $Upn) {
             
+                $SanType = $XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME
+                # https://msdn.microsoft.com/en-us/library/aa374981(VS.85).aspx
+                $SanEntry = New-Object -ComObject X509Enrollment.CAlternativeName
+                $SanEntry.InitializeFromString($SanType, $Entry)
+                $Sans.Add($SanEntry)
+
+            }
+
+            Foreach ($Entry in $DnsName) {
+            
+                $SanType = $XCN_CERT_ALT_NAME_DNS_NAME
                 # https://msdn.microsoft.com/en-us/library/aa374981(VS.85).aspx
                 $SanEntry = New-Object -ComObject X509Enrollment.CAlternativeName
                 $SanEntry.InitializeFromString($SanType, $Entry)
@@ -419,7 +439,7 @@ Function New-CraftedCertificate {
 
         }
 
-        # CRL Distribution Points Extension
+        # Set the CRL Distribution Points Extension if specified as Argument
         If ($Cdp) {
 
             # No Interface for this OID, see https://msdn.microsoft.com/en-us/library/windows/desktop/aa378077(v=vs.85).aspx
@@ -440,7 +460,7 @@ Function New-CraftedCertificate {
 
         }
 
-        # Authority Information Access Extension
+        # Set the Authority Information Access Extension if specified as Argument
         If ($Aia) {
 
             # No Interface for this OID, see https://msdn.microsoft.com/en-us/library/windows/desktop/aa378077(v=vs.85).aspx

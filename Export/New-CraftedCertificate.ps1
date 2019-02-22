@@ -6,6 +6,38 @@
 # https://social.technet.microsoft.com/Forums/en-US/f568edfa-7f93-46a4-aab9-a06151592dd9/converting-ascii-to-asn1-der?forum=winserverpowershell
 # https://gallery.technet.microsoft.com/scriptcenter/Self-signed-certificate-5920a7c6
 
+[hashtable]$EkuToOidTable = @{
+
+    # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_hash_tables?view=powershell-6 
+    # https://msdn.microsoft.com/en-us/library/windows/desktop/aa378132(v=vs.85).aspx
+
+    CAExchange = "1.3.6.1.4.1.311.21.5";
+    CertRequestAgent = "1.3.6.1.4.1.311.20.2.1";
+    ClientAuth = "1.3.6.1.5.5.7.3.2";
+    CodeSigning = "1.3.6.1.5.5.7.3.3";
+    DocumentSigning = "1.3.6.1.4.1.311.10.3.12";
+    EncryptingFileSystem = "1.3.6.1.4.1.311.10.3.4";
+    FileRecovery = "1.3.6.1.4.1.311.10.3.4.1";
+    IPSecEndSystem = "1.3.6.1.5.5.7.3.5";
+    IPSecIKEIntermediate = "1.3.6.1.5.5.8.2.2";
+    IPSecTunnelEndpoint = "1.3.6.1.5.5.7.3.6";
+    IPSecUser = "1.3.6.1.5.5.7.3.7";
+    KeyRecovery = "1.3.6.1.4.1.311.10.3.11";
+    KDCAuth = "1.3.6.1.5.2.3.5";
+    MicrosoftTrustListSigning = "1.3.6.1.4.1.311.10.3.1";
+    QualifiedSubordination = "1.3.6.1.4.1.311.10.3.10";
+    RootListSigner = "1.3.6.1.4.1.311.10.3.9";
+    SecureEmail = "1.3.6.1.5.5.7.3.4";
+    ServerAuth = "1.3.6.1.5.5.7.3.1";
+    SmartCardLogon = "1.3.6.1.4.1.311.20.2.2";
+    TimeStamping = "1.3.6.1.5.5.7.3.8";
+    OCSPSigning = "1.3.6.1.5.5.7.3.9";
+    RemoteDesktopAuth = "1.3.6.1.4.1.311.54.1.2";
+    PrivateKeyArchival = "1.3.6.1.4.1.311.21.5";
+    AMTProvisioning = "2.16.840.1.113741.1.2.3";
+    
+}
+
 Function New-CraftedCertificate {
 
     [cmdletbinding()]
@@ -19,7 +51,7 @@ Function New-CraftedCertificate {
         $CA = $False,
 
         [Parameter(Mandatory=$False)]
-        [ValidateSet("SmartCardLogon","ClientAuth","ServerAuth","CodeSigning")]
+        [ValidateScript({$EkuToOidTable.PSBase.Keys -contains $_})]
         [String[]]
         $Eku,
 
@@ -131,7 +163,7 @@ Function New-CraftedCertificate {
         New-Variable -Name UserContext -Value 0x1 -Option Constant
         New-Variable -Name MachineContext -Value 0x2 -Option Constant
 
-        # https://docs.microsoft.com/de-de/windows/desktop/api/certenroll/ne-certenroll-x500nameflags
+        # https://docs.microsoft.com/en-us/windows/desktop/api/certenroll/ne-certenroll-x500nameflags
         # https://docs.microsoft.com/en-us/dotnet/api/microsoft.hpc.scheduler.store.x500nameflags?view=hpc-sdk-5.1.6115
         New-Variable -Name XCN_CERT_NAME_STR_NONE -Value 0 -Option Constant
         New-Variable -Name XCN_CERT_NAME_STR_FORCE_UTF8_DIR_STR_FLAG -Value 0x80000 -Option Constant
@@ -148,12 +180,6 @@ Function New-CraftedCertificate {
         #New-Variable -Name XCN_CERT_ALT_NAME_REGISTERED_ID -Value 9 -Option Constant
         #New-Variable -Name XCN_CERT_ALT_NAME_GUID -Value 10 -Option Constant
         New-Variable -Name XCN_CERT_ALT_NAME_USER_PRINCIPLE_NAME -Value 11 -Option Constant
-
-        # https://msdn.microsoft.com/de-de/library/windows/desktop/aa378132(v=vs.85).aspx
-        New-Variable -Name XCN_OID_PKIX_KP_SERVER_AUTH -Value '1.3.6.1.5.5.7.3.1' -Option Constant
-        New-Variable -Name XCN_OID_PKIX_KP_CLIENT_AUTH -Value '1.3.6.1.5.5.7.3.2' -Option Constant
-        New-Variable -Name XCN_OID_PKIX_KP_CODE_SIGNING -Value '1.3.6.1.5.5.7.3.3' -Option Constant
-        New-Variable -Name XCN_OID_KP_SMARTCARD_LOGON -Value '1.3.6.1.4.1.311.20.2.2' -Option Constant
 
         # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379367(v=vs.85).aspx
         New-Variable -Name XCN_OID_CRL_DIST_POINTS -Value '2.5.29.31' -Option Constant
@@ -297,7 +323,7 @@ Function New-CraftedCertificate {
 
             # CA Certifcate Key Usages
             # https://security.stackexchange.com/questions/49229/root-certificate-key-usage-non-self-signed-end-entity
-            # https://msdn.microsoft.com/de-de/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
+            # https://msdn.microsoft.com/en-us/library/system.security.cryptography.x509certificates.x509keyusageflags(v=vs.110).aspx
             # Since a CA is supposed to issue certificate and CRL, it should have, on a general basis, the keyCertSign and cRLSign flags. 
             # These two flags are sufficient.
             [Security.Cryptography.X509Certificates.X509KeyUsageFlags]$KeyUsage = "KeyCertSign, CrlSign, DigitalSignature"
@@ -347,39 +373,7 @@ Function New-CraftedCertificate {
 
                 $EnhancedKeyUsageOid = New-Object -ComObject 'X509Enrollment.CObjectId'
 
-                If ($_ -eq "SmartCardLogon") {
-
-                    # Validating if we have a CDP Extension specified
-                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                    If (-not ($Cdp)) {
-                        Write-Warning "The CDP Extension is mandatory for Smartcard Logon Certificates." 
-                    }
-
-                    # Validating if we have a Subject Alternative Name specified
-                    # Mandatory for Smartcard Logon, see https://support.microsoft.com/en-us/kb/281245
-                    If (-not ($Upn)) {
-                        Write-Warning "The SAN Extension with an UPN is mandatory for Smartcard Logon Certificates." 
-                    }
-
-                    # Smart Card Logon EKU
-                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_KP_SMARTCARD_LOGON)
-
-                }
-
-                If ($_ -eq "ClientAuth") {
-                    # Client Authentication EKU
-                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_CLIENT_AUTH)
-                }
-
-                If ($_ -eq "ServerAuth") {
-                    # Server Authentication EKU
-                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_SERVER_AUTH)
-                }
-
-                If ($_ -eq "CodeSigning") {
-                    # Code Signing EKU
-                    $EnhancedKeyUsageOid.InitializeFromValue($XCN_OID_PKIX_KP_CODE_SIGNING)
-                }
+                $EnhancedKeyUsageOid.InitializeFromValue($EkuToOidTable[$_])
 
                 $EnhancedKeyUsageOids.Add($EnhancedKeyUsageOid)
     

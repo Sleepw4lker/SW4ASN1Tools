@@ -4,30 +4,30 @@ Some helpful functions to play with Certificates in Powershell.
 
 Exported Functions:
 * `New-CraftedCertificate` crafts a Certificate based on the given Arguments. Can both create self-signed Certificates as well as sign with a different Key. You can specify the following Enhanced Key Usages (EKUs):
-  * CAExchange
-  * CertRequestAgent
-  * ClientAuth
-  * CodeSigning
-  * DocumentSigning
-  * EncryptingFileSystem
-  * FileRecovery
-  * IPSecEndSystem
-  * IPSecIKEIntermediate
-  * IPSecTunnelEndpoint
-  * IPSecUser
-  * KeyRecovery
-  * KDCAuth
-  * MicrosoftTrustListSigning
-  * QualifiedSubordination
-  * RootListSigner
-  * SecureEmail
-  * ServerAuth
-  * SmartCardLogon
-  * TimeStamping
-  * OCSPSigning
-  * RemoteDesktopAuth
-  * PrivateKeyArchival
-  * AMTProvisioning
+  * `CAExchange`
+  * `CertRequestAgent`
+  * `ClientAuth`
+  * `CodeSigning`
+  * `DocumentSigning`
+  * `EncryptingFileSystem`
+  * `FileRecovery`
+  * `IPSecEndSystem`
+  * `IPSecIKEIntermediate`
+  * `IPSecTunnelEndpoint`
+  * `IPSecUser`
+  * `KeyRecovery`
+  * `KDCAuth`
+  * `MicrosoftTrustListSigning`
+  * `QualifiedSubordination`
+  * `RootListSigner`
+  * `SecureEmail`
+  * `ServerAuth`
+  * `SmartCardLogon`
+  * `TimeStamping`
+  * `OCSPSigning`
+  * `RemoteDesktopAuth`
+  * `PrivateKeyArchival`
+  * `AMTProvisioning`
 * `New-OCSPCertificateRequest` creates a Certificate Signing Request for the Microsoft OCSP Responder that contains the AKI Extension, which allows for manual Enrollment, e.g. in a DMZ Scenario. Supports specifying the KSP, thus the usage of a HSM is possible.
 * `New-CDPExtension` creates a DER Encoded CDP Extension for Usage with the above Functions.
 * `New-AIAExtension` creates a DER Encoded AIA Extension for Usage with the above Functions.

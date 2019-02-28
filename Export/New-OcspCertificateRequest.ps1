@@ -1,3 +1,9 @@
+<#
+To Do:
+- Rewrite to "native" COM Objects instead of certreq fiddling.
+- Check if there is a native Interface for the AKI Extension
+#>
+
 Function New-OcspCertificateRequest {
 
     [cmdletbinding()]

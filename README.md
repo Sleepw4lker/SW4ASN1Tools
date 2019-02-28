@@ -55,7 +55,7 @@ $a,$b,$c,$d
 ### Demonstrating an EKU Constraint violation
 ```powershell
 $a = New-CraftedCertificate -CA -CommonName "Root CA" 
-$c = New-CraftedCertificate -CA -Eku "ClientAuth" -CommonName "Sub CA 1" -SigningCert $a
+$b = New-CraftedCertificate -CA -Eku "ClientAuth" -CommonName "Sub CA 1" -SigningCert $a
 $c = New-CraftedCertificate -Eku "ServerAuth" -CommonName "Invalid EKU Certificate" -DnsName "www.demo.org" -SigningCert $b
 $a,$b,$c
 ```

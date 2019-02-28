@@ -6,7 +6,7 @@
 # https://social.technet.microsoft.com/Forums/en-US/f568edfa-7f93-46a4-aab9-a06151592dd9/converting-ascii-to-asn1-der?forum=winserverpowershell
 # https://gallery.technet.microsoft.com/scriptcenter/Self-signed-certificate-5920a7c6
 
-[hashtable]$EkuToOidTable = @{
+[hashtable]$EkuNameToOidTable = @{
 
     # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_hash_tables?view=powershell-6 
     # https://msdn.microsoft.com/en-us/library/windows/desktop/aa378132(v=vs.85).aspx
@@ -51,7 +51,7 @@ Function New-CraftedCertificate {
         $CA = $False,
 
         [Parameter(Mandatory=$False)]
-        [ValidateScript({$EkuToOidTable.PSBase.Keys -contains $_})]
+        [ValidateScript({$EkuNameToOidTable.PSBase.Keys -contains $_})]
         [String[]]
         $Eku,
 
@@ -116,7 +116,7 @@ Function New-CraftedCertificate {
         $ValidityPeriodUnits = 1,
 
         [Parameter(Mandatory=$False)]
-        [ValidateRange(1,3600)]
+        [ValidateRange(0,1440)] # One Day should be more than enough 
         [Int]
         $ClockSkew = 10,
 
@@ -218,7 +218,8 @@ Function New-CraftedCertificate {
         $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
         $TargetCertificate.InitializeFromPrivateKey($UserContext, $TargetCertificatePrivateKey, "")
 
-        # Determine if we shall encode Subject and Issuer in PrintableString (Default) or UTF-8
+        # Determine if we shall encode Subject and Issuer in PrintableString (Default for AD CS, 
+        # non-default for CX509CertificateRequestCertificate) or UTF-8
         If ($Encoding -eq "PrintableString") {
             $SubjectEncodingFlag = $XCN_CERT_NAME_STR_DISABLE_UTF8_DIR_STR_FLAG
         }
@@ -373,7 +374,7 @@ Function New-CraftedCertificate {
 
                 $EnhancedKeyUsageOid = New-Object -ComObject 'X509Enrollment.CObjectId'
 
-                $EnhancedKeyUsageOid.InitializeFromValue($EkuToOidTable[$_])
+                $EnhancedKeyUsageOid.InitializeFromValue($EkuNameToOidTable[$_])
 
                 $EnhancedKeyUsageOids.Add($EnhancedKeyUsageOid)
     

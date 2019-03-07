@@ -3,7 +3,7 @@
 Some helpful functions to play with Certificates in Powershell.
 
 Exported Functions:
-* `New-CraftedCertificate` crafts a Certificate based on the given Arguments. Can both create self-signed Certificates as well as sign with a different Key. You can specify the following Enhanced Key Usages (EKUs):
+* `New-CraftedCertificate` crafts a Certificate based on the given Arguments. Can create self-signed Certificates as well as sign with a different Key, or output a Certificate Request for submission to a Certification Authority. You can specify the following Enhanced Key Usages (EKUs):
   * `CAExchange`
   * `CertRequestAgent`
   * `ClientAuth`

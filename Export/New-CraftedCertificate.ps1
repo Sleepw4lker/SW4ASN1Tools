@@ -144,7 +144,13 @@ Function New-CraftedCertificate {
         [Parameter(Mandatory=$False)]
         [ValidateRange(-1,16)] # Should be sufficient...? RFC?
         [Int]
-        $PathLength = -1 # -1 means none
+        $PathLength = -1, # -1 means none
+
+        # The Csr Parameter dumps the Certificate Request before it is issued, which allows you 
+        # to submit the Request to a Certification Authority
+        [Parameter(Mandatory=$False)]
+        [Switch]
+        $Csr
 
     )
 
@@ -240,81 +246,86 @@ Function New-CraftedCertificate {
 
         $TargetCertificate.Subject = $SubjectDistinguishedName
 
-        # Set Signing Certificate
+        If (-not $Csr) {
 
-        If ($SigningCert) {
+            # Set Signing Certificate
 
-            # Validating if our Signing Certificate is really a CA Certificate
-            If (-not ($SigningCert.Extensions.CertificateAuthority)) {
-                Write-Warning "Signing Certificate seems not to be a CA certificate." 
+            If ($SigningCert) {
+
+                # Validating if our Signing Certificate is really a CA Certificate
+                If (-not ($SigningCert.Extensions.CertificateAuthority)) {
+                    Write-Warning "Signing Certificate seems not to be a CA certificate." 
+                }
+
+                # First Argument: MachineContext (0/1)
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/aa376832(v=vs.85).aspx
+                # Alternative Method: $SigningCert.Initialize($SigningCert.PSParentPath, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
+                $SignerCertificateObject =  New-Object -ComObject 'X509Enrollment.CSignerCertificate'
+                $SignerCertificateObject.Initialize(
+                    [int]($SigningCert.PSParentPath -match "LocalMachine"), 
+                    0, 
+                    4, 
+                    $SigningCert.Thumbprint
+                )
+                $TargetCertificate.SignerCertificate = $SignerCertificateObject
+
+                # If we have a Signing Certificate, we copy its Subject to the Target Certificates Issuer
+                $IssuerDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
+
+                # We must have the CN encoded as printableString instead of UTF-8, otherwise CRL verification will fail
+                # During certificate chain validation (from the end entity to a trusted root) the KeyId is used to create 
+                # the certificate chain and it works independently of the subject and issuer codification (PrintableString or UTF8)
+                # During revocation status validation, a binary comparison is made between the certificate issuer and the CRL issuer,
+                # so both fields must use the same codification in order to match (PrintableString or UTF8)
+                # https://social.technet.microsoft.com/Forums/windowsserver/en-US/0459983f-4f19-48ee-b099-dfd484483176/active-directory-certificate-services-cannot-verify-certificate-chain-bad-cert-issuer-base-crl?forum=winserversecurity
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/bb540814(v=vs.85).aspx
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
+
+                $IssuerDistinguishedName.Encode(
+                    $SigningCert.Subject,
+                    $SubjectEncodingFlag
+                )
+
+                $TargetCertificate.Issuer = $IssuerDistinguishedName
+
+            }
+            Else {
+
+                # If no Signing Certificate is given, the Certificate is Self-Signed,
+                # Thus it is its own Issuer
+                $TargetCertificate.Issuer = $SubjectDistinguishedName
+
             }
 
-            # First Argument: MachineContext (0/1)
-            # https://msdn.microsoft.com/en-us/library/windows/desktop/aa376832(v=vs.85).aspx
-            # Alternative Method: $SigningCert.Initialize($SigningCert.PSParentPath, 0, 1, $([Convert]::ToBase64String($signer.RawData)))
-            $SignerCertificateObject =  New-Object -ComObject 'X509Enrollment.CSignerCertificate'
-            $SignerCertificateObject.Initialize(
-                [int]($SigningCert.PSParentPath -match "LocalMachine"), 
-                0, 
-                4, 
-                $SigningCert.Thumbprint
-            )
-            $TargetCertificate.SignerCertificate = $SignerCertificateObject
+            # Set Certificate Validity Period
 
-            # If we have a Signing Certificate, we copy its Subject to the Target Certificates Issuer
-            $IssuerDistinguishedName = New-Object -ComObject 'X509Enrollment.CX500DistinguishedName'
+            # Validity Periods are always written into the Cert as Universal Time
+            $Now = (Get-Date).ToUniversalTime()
 
-            # We must have the CN encoded as printableString instead of UTF-8, otherwise CRL verification will fail
-            # During certificate chain validation (from the end entity to a trusted root) the KeyId is used to create 
-            # the certificate chain and it works independently of the subject and issuer codification (PrintableString or UTF8)
-            # During revocation status validation, a binary comparison is made between the certificate issuer and the CRL issuer,
-            # so both fields must use the same codification in order to match (PrintableString or UTF8)
-            # https://social.technet.microsoft.com/Forums/windowsserver/en-US/0459983f-4f19-48ee-b099-dfd484483176/active-directory-certificate-services-cannot-verify-certificate-chain-bad-cert-issuer-base-crl?forum=winserversecurity
-            # https://msdn.microsoft.com/en-us/library/windows/desktop/bb540814(v=vs.85).aspx
-            # https://msdn.microsoft.com/en-us/library/windows/desktop/aa379394(v=vs.85).aspx
+            Switch ($ValidityPeriod) {
 
-            $IssuerDistinguishedName.Encode(
-                $SigningCert.Subject,
-                $SubjectEncodingFlag
-            )
+                "Minutes"   { $NotAfter = $Now.AddMinutes($ValidityPeriodUnits) }
+                "Hours"     { $NotAfter = $Now.AddHours($ValidityPeriodUnits) }
+                "Days"      { $NotAfter = $Now.AddDays($ValidityPeriodUnits) }
+                "Weeks"     { $NotAfter = $Now.AddWeeks($ValidityPeriodUnits) }
+                "Months"    { $NotAfter = $Now.AddMonths($ValidityPeriodUnits) }
+                "Years"     { $NotAfter = $Now.AddYears($ValidityPeriodUnits) }
 
-            $TargetCertificate.Issuer = $IssuerDistinguishedName
-        }
-        Else {
+            }
 
-            # If no Signing Certificate is given, the Certificate is Self-Signed,
-            # Thus it is its own Issuer
-            $TargetCertificate.Issuer = $SubjectDistinguishedName
+            # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
+            $TargetCertificate.NotBefore = $Now.AddMinutes($ClockSkew * -1)
+            $TargetCertificate.NotAfter = $NotAfter.AddMinutes($ClockSkew) 
 
-        }
+            # Set Serial Number of the Certificate if specified as Argument, otherwise use a random SN
+            If ($SerialNumber) {
 
-        # Set Certificate Validity Period
+                $TargetCertificate.SerialNumber.InvokeSet(
+                    $(Convert-StringToCertificateSerialNumber -SerialNumber $SerialNumber), 
+                    1
+                )
 
-        # Validity Periods are always written into the Cert as Universal Time
-        $Now = (Get-Date).ToUniversalTime()
-
-        Switch ($ValidityPeriod) {
-
-            "Minutes"   { $NotAfter = $Now.AddMinutes($ValidityPeriodUnits) }
-            "Hours"     { $NotAfter = $Now.AddHours($ValidityPeriodUnits) }
-            "Days"      { $NotAfter = $Now.AddDays($ValidityPeriodUnits) }
-            "Weeks"     { $NotAfter = $Now.AddWeeks($ValidityPeriodUnits) }
-            "Months"    { $NotAfter = $Now.AddMonths($ValidityPeriodUnits) }
-            "Years"     { $NotAfter = $Now.AddYears($ValidityPeriodUnits) }
-
-        }
-
-        # Backup $ClockSkew in Minutes (Default: 10) to avoid timing issues
-        $TargetCertificate.NotBefore = $Now.AddMinutes($ClockSkew * -1)
-        $TargetCertificate.NotAfter = $NotAfter.AddMinutes($ClockSkew) 
-
-        # Set Serial Number of the Certificate if specified as Argument, otherwise use a random SN
-        If ($SerialNumber) {
-
-            $TargetCertificate.SerialNumber.InvokeSet(
-                $(Convert-StringToCertificateSerialNumber -SerialNumber $SerialNumber), 
-                1
-            )
+            }
 
         }
 
@@ -480,17 +491,26 @@ Function New-CraftedCertificate {
         $EnrollmentObject.InitializeFromRequest($TargetCertificate)
         $TargetCertificateCsr = $EnrollmentObject.CreateRequest(0)
 
-        # Signing the Certificate
-        $EnrollmentObject.InstallResponse(
-            2,
-            $TargetCertificateCsr, 
-            0, 
-            ""
-        )
+        If ($Csr) {
 
-        # Returning the Certificate, have to rebuild the Query so that it'll work when there is no Subject specified
-        # Or find a way to extract the Info from the $EnrollmentObject
-        Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match $CommonName } | Sort-Object -Descending NotAfter | Select-Object -First 1
+            $TargetCertificateCsr
+
+        }
+        Else {
+
+            # Signing the Certificate
+            $EnrollmentObject.InstallResponse(
+                2,
+                $TargetCertificateCsr, 
+                0, 
+                ""
+            )
+
+            # Returning the Certificate, have to rebuild the Query so that it'll work when there is no Subject specified
+            # Or find a way to extract the Info from the $EnrollmentObject
+            Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match $CommonName } | Sort-Object -Descending NotAfter | Select-Object -First 1
+
+        }
 
     }
 

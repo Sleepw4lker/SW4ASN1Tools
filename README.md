@@ -64,3 +64,8 @@ $a,$b,$c
 ```powershell
 New-OcspCertificateRequest -Subject "CN=My-Responder" -Ksp "nCipher Security World Key Storage Provider" -Aki "060DDD83737C311EDA5E5B677D8C4D663ED5C5BF" -KeyLength 4096
 ```
+
+### Creating a Certificate Signing Request (CSR) for a Web Server Certificate containing multiple SANs of Type DNSName
+```powershell
+New-CraftedCertificate -Eku ServerAuth -DnsName "web1.fabrikam.com","web2.fabrikam.com","web3.fabrikam.com" -KeyLength 4096 -csr | Out-File CertificateRequestFile.csr -Encoding ascii
+```

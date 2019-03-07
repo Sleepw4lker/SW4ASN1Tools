@@ -506,8 +506,12 @@ Function New-CraftedCertificate {
                 ""
             )
 
-            # Returning the Certificate
-            $EnrollmentObject.Certificate()
+            # Returning the Certificate as PowerShell Object
+            $CertificateObject = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+            $CertificateObject.Import([Convert]::FromBase64String($EnrollmentObject.Certificate()))
+            # This would return it directly as an X509Certificate2 Object, but this cannot be used as SigningCertificate afterwards
+            # $CertificateObject
+            Get-ChildItem Cert:\CurrentUser\My\$($CertificateObject.Thumbprint)
 
         }
 

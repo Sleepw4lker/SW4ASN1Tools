@@ -220,8 +220,16 @@ Function New-CraftedCertificate {
         $TargetCertificatePrivateKey.Create()
 
         # Begin Assembling the Certificate Signing Request
+        # https://docs.microsoft.com/en-us/windows/desktop/seccertenroll/certificate-request-functions
+        If ($Csr.IsPresent) {
+            # Represents a PKCS #10 certificate request. A PKCS #10 request can be sent directly to a CA, or it can be wrapped by a PKCS #7 or CMC request.
+            $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestPkcs10'
+        }
+        Else {
+            # Enables you to create a certificate directly without applying to a certification authority (CA).
+            $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
+        }
 
-        $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
         $TargetCertificate.InitializeFromPrivateKey($UserContext, $TargetCertificatePrivateKey, "")
 
         # Determine if we shall encode Subject and Issuer in PrintableString (Default for AD CS, 
@@ -246,9 +254,9 @@ Function New-CraftedCertificate {
 
         $TargetCertificate.Subject = $SubjectDistinguishedName
 
-        If (-not $Csr) {
+        If (-not $Csr.IsPresent) {
 
-            # Set Signing Certificate
+            # Set Signing Certificate and Issuer
 
             If ($SigningCert) {
 
@@ -491,7 +499,7 @@ Function New-CraftedCertificate {
         $EnrollmentObject.InitializeFromRequest($TargetCertificate)
         $TargetCertificateCsr = $EnrollmentObject.CreateRequest(0)
 
-        If ($Csr) {
+        If ($Csr.IsPresent) {
 
             $TargetCertificateCsr
 

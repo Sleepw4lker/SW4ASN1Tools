@@ -506,9 +506,8 @@ Function New-CraftedCertificate {
                 ""
             )
 
-            # Returning the Certificate, have to rebuild the Query so that it'll work when there is no Subject specified
-            # Or find a way to extract the Info from the $EnrollmentObject
-            Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match $CommonName } | Sort-Object -Descending NotAfter | Select-Object -First 1
+            # Returning the Certificate
+            $EnrollmentObject.Certificate()
 
         }
 

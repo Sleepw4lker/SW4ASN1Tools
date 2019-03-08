@@ -73,6 +73,11 @@ Function New-CraftedCertificate {
         $Upn,
 
         [Parameter(Mandatory=$False)]
+        [ValidatePattern("^[0-9a-fA-F]{40}$")]
+        [String]
+        $Aki,
+
+        [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()] # anyone has a http and ldap regex?
         [String[]]
         $Cdp,
@@ -438,6 +443,22 @@ Function New-CraftedCertificate {
             $TargetCertificate.X509Extensions.Add($SansExtension)
 
         }
+    
+        # Set the Authority Key Identifier Extension if specified as Argument
+        If ($Aki) {
+
+            $AkiExtension = New-Object -ComObject X509Enrollment.CX509ExtensionAuthorityKeyIdentifier 
+
+            # https://docs.microsoft.com/en-us/windows/desktop/api/certenroll/nf-certenroll-ix509extensionauthoritykeyidentifier-initializeencode
+            $AkiExtension.InitializeEncode(
+                $XCN_CRYPT_STRING_BASE64, 
+                $(Convert-DERToBASE64 -String $Aki)
+            )
+
+            # Adding the Extension to the Certificate
+            $TargetCertificate.X509Extensions.Add($AkiExtension)
+
+        }
 
         # Set the CRL Distribution Points Extension if specified as Argument
         If ($Cdp) {
@@ -517,7 +538,8 @@ Function New-CraftedCertificate {
             # Returning the Certificate as PowerShell Object
             $CertificateObject = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
             $CertificateObject.Import([Convert]::FromBase64String($EnrollmentObject.Certificate()))
-            # This would return it directly as an X509Certificate2 Object, but this cannot be used as SigningCertificate afterwards
+            # This would return it directly as an X509Certificate2 Object, but this cannot be used as 
+            # -SigningCertificate afterwards as the Powershell-specific stuff is missing, but perhaps we can get it working?
             # $CertificateObject
             Get-ChildItem Cert:\CurrentUser\My\$($CertificateObject.Thumbprint)
 

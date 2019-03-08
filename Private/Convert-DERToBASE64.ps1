@@ -1,7 +1,8 @@
 # What about Convert-DERToBASE64
 Function Convert-DERToBASE64 {
 
-    # Converts DER to BASE64
+    # Converts a String to a BASE64-encoded Byte Array
+    # $XCN_CRYPT_STRING_BASE64 = 0x1
     [cmdletbinding()]
     param (
         [Parameter(Mandatory=$True)]
@@ -13,7 +14,7 @@ Function Convert-DERToBASE64 {
     process {
 
         # Convert to Byte Array
-        $ByteObject = $(
+        $ByteArray = $(
 
             For ($i = 0; $i -lt $String.length; $i += 2) {
 
@@ -24,7 +25,7 @@ Function Convert-DERToBASE64 {
         )
 
         # Convert Byte Array to BASE64
-        [Convert]::ToBase64String($ByteObject)
+        [Convert]::ToBase64String($ByteArray)
 
     }
 

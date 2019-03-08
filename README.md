@@ -65,7 +65,7 @@ $a,$b,$c
 New-CraftedCertificate -Eku ServerAuth -DnsName "web1.fabrikam.com","web2.fabrikam.com","web3.fabrikam.com" -KeyLength 4096 -Csr | Out-File CertificateRequestFile.csr -Encoding ascii
 ```
 
-### Creating a manual OCSP Request specifying AKI and a HSM with the "Legacy" Method (certreq wrapping)
+### Creating a manual OCSP Request specifying AKI and a HSM
 ```powershell
 New-CraftedCertificate -CommonName "My-Responder" -Ksp "nCipher Security World Key Storage Provider" -Eku "OCSPSigning" -Aki "060DDD83737C311EDA5E5B677D8C4D663ED5C5BF" -KeyLength 4096 -Csr | Out-File CertificateRequestFile.csr -Encoding ascii
 ```

@@ -6,38 +6,6 @@
 # https://social.technet.microsoft.com/Forums/en-US/f568edfa-7f93-46a4-aab9-a06151592dd9/converting-ascii-to-asn1-der?forum=winserverpowershell
 # https://gallery.technet.microsoft.com/scriptcenter/Self-signed-certificate-5920a7c6
 
-[hashtable]$EkuNameToOidTable = @{
-
-    # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_hash_tables?view=powershell-6 
-    # https://msdn.microsoft.com/en-us/library/windows/desktop/aa378132(v=vs.85).aspx
-
-    CAExchange = "1.3.6.1.4.1.311.21.5";
-    CertRequestAgent = "1.3.6.1.4.1.311.20.2.1";
-    ClientAuth = "1.3.6.1.5.5.7.3.2";
-    CodeSigning = "1.3.6.1.5.5.7.3.3";
-    DocumentSigning = "1.3.6.1.4.1.311.10.3.12";
-    EncryptingFileSystem = "1.3.6.1.4.1.311.10.3.4";
-    FileRecovery = "1.3.6.1.4.1.311.10.3.4.1";
-    IPSecEndSystem = "1.3.6.1.5.5.7.3.5";
-    IPSecIKEIntermediate = "1.3.6.1.5.5.8.2.2";
-    IPSecTunnelEndpoint = "1.3.6.1.5.5.7.3.6";
-    IPSecUser = "1.3.6.1.5.5.7.3.7";
-    KeyRecovery = "1.3.6.1.4.1.311.10.3.11";
-    KDCAuth = "1.3.6.1.5.2.3.5";
-    MicrosoftTrustListSigning = "1.3.6.1.4.1.311.10.3.1";
-    QualifiedSubordination = "1.3.6.1.4.1.311.10.3.10";
-    RootListSigner = "1.3.6.1.4.1.311.10.3.9";
-    SecureEmail = "1.3.6.1.5.5.7.3.4";
-    ServerAuth = "1.3.6.1.5.5.7.3.1";
-    SmartCardLogon = "1.3.6.1.4.1.311.20.2.2";
-    TimeStamping = "1.3.6.1.5.5.7.3.8";
-    OCSPSigning = "1.3.6.1.5.5.7.3.9";
-    RemoteDesktopAuth = "1.3.6.1.4.1.311.54.1.2";
-    PrivateKeyArchival = "1.3.6.1.4.1.311.21.5";
-    AMTProvisioning = "2.16.840.1.113741.1.2.3";
-    
-}
-
 Function New-CraftedCertificate {
 
     [cmdletbinding()]
@@ -335,7 +303,7 @@ Function New-CraftedCertificate {
 
                 $TargetCertificate.SerialNumber.InvokeSet(
                     $(Convert-StringToCertificateSerialNumber -SerialNumber $SerialNumber), 
-                    1
+                    1 # Document and set Constant
                 )
 
             }
@@ -377,7 +345,7 @@ Function New-CraftedCertificate {
 
             # First Parameter: CA or not
             $BasicConstraintsExtension.InitializeEncode(
-                $True, 
+                $True, # Constant, Document
                 $PathLength
             )
 
@@ -505,9 +473,9 @@ Function New-CraftedCertificate {
         # Specifying the Hashing Algorithm to use
         $HashAlgorithmObject = New-Object -ComObject X509Enrollment.CObjectId
         $HashAlgorithmObject.InitializeFromAlgorithmName(
-            1, 
-            0, 
-            0, 
+            1, # Document, Constant
+            0, # Document, Constant
+            0, # Document, Constant
             $SignatureHashAlgorithm
         )
         $TargetCertificate.HashAlgorithm = $HashAlgorithmObject
@@ -529,18 +497,21 @@ Function New-CraftedCertificate {
 
             # Signing the Certificate
             $EnrollmentObject.InstallResponse(
-                2,
+                2, # Document, Constant
                 $TargetCertificateCsr, 
-                0, 
-                ""
+                0, # Document, Constant
+                "" # Document, Constant
             )
 
-            # Returning the Certificate as PowerShell Object
+            # We load the Certificate into an X509Certificate2 Object so that we can call Certificate Properties
             $CertificateObject = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
             $CertificateObject.Import([Convert]::FromBase64String($EnrollmentObject.Certificate()))
+            
             # This would return it directly as an X509Certificate2 Object, but this cannot be used as 
             # -SigningCertificate afterwards as the Powershell-specific stuff is missing, but perhaps we can get it working?
             # $CertificateObject
+            
+            # Returning the Certificate as PowerShell Object
             Get-ChildItem Cert:\CurrentUser\My\$($CertificateObject.Thumbprint)
 
         }

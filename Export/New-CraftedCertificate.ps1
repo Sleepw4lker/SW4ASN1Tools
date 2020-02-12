@@ -203,7 +203,13 @@ Function New-CraftedCertificate {
             $TargetCertificate = New-Object -ComObject 'X509Enrollment.CX509CertificateRequestCertificate'
         }
 
-        $TargetCertificate.InitializeFromPrivateKey($UserContext, $TargetCertificatePrivateKey, "")
+        # https://docs.microsoft.com/en-us/windows/win32/api/certenroll/nf-certenroll-ix509certificaterequestpkcs10-initializefromprivatekey
+        # https://docs.microsoft.com/en-us/windows/win32/api/certenroll/ne-certenroll-x509certificateenrollmentcontext
+        $TargetCertificate.InitializeFromPrivateKey(
+            [int]($Scope -eq "Computer") + 1, 
+            $TargetCertificatePrivateKey, 
+            ""
+            )
 
         # Determine if we shall encode Subject and Issuer in PrintableString (Default for AD CS, 
         # non-default for CX509CertificateRequestCertificate) or UTF-8

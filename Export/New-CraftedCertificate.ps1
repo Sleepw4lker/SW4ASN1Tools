@@ -107,8 +107,7 @@ Function New-CraftedCertificate {
         [ValidateSet("PrintableString","UTF-8")]
         [String]
         $Encoding = "PrintableString",
-        
-        # Still broken
+
         [Parameter(Mandatory=$False)]
         [ValidateSet("Computer","User")]
         [String]
